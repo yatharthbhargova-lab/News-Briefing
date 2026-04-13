@@ -719,6 +719,242 @@ Use estimates for future years. FX: USD=84, GBP=107, EUR=91, CNY=11.5, SGD=62, A
   );
 }
 
+
+// ── Search & Add Company ──────────────────────────────────────────────────────
+const CURRENCY_MAP = {
+  "India": "INR", "USA": "USD", "UK": "GBP", "Europe": "EUR",
+  "Germany": "EUR", "France": "EUR", "China": "CNY", "Japan": "JPY",
+  "Singapore": "SGD", "Australia": "AUD", "Canada": "CAD", "Brazil": "BRL",
+  "South Korea": "KRW", "Switzerland": "CHF", "Netherlands": "EUR",
+  "Sweden": "SEK", "Indonesia": "IDR", "Malaysia": "MYR", "Thailand": "THB",
+};
+const FLAG_MAP = {
+  "India": "🇮🇳", "USA": "🇺🇸", "UK": "🇬🇧", "Germany": "🇩🇪", "France": "🇫🇷",
+  "China": "🇨🇳", "Japan": "🇯🇵", "Singapore": "🇸🇬", "Australia": "🇦🇺",
+  "Canada": "🇨🇦", "Brazil": "🇧🇷", "South Korea": "🇰🇷", "Switzerland": "🇨🇭",
+  "Netherlands": "🇳🇱", "Sweden": "🇸🇪", "Indonesia": "🇮🇩", "Malaysia": "🇲🇾",
+  "Thailand": "🇹🇭", "Europe": "🇪🇺",
+};
+const COMPANY_COLORS = ["#e53935","#1976d2","#388e3c","#7b1fa2","#f57c00","#0288d1","#c62828","#2e7d32","#6a1b9a","#00838f","#ad1457","#1565c0"];
+
+function SearchAddCompany({ theme, onAdd, existingNames }) {
+  const [query, setQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [results, setResults] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [addingSector, setAddingSector] = useState("pharmacy");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const T = theme === "dark"
+    ? { bg: "#080810", surface: "#0c0c18", border: "#151528", text: "#ddd5c5", muted: "#444", accent: "#ff8c00" }
+    : { bg: "#f5f3ee", surface: "#fff", border: "#e0dbd0", text: "#1a1510", muted: "#888", accent: "#c47000" };
+
+  async function handleSearch() {
+    if (!query.trim()) return;
+    setSearching(true); setResults(null); setPreview(null); setError(""); setSuccess("");
+    try {
+      const text = await callClaude(
+        `Search for healthcare, pharmacy, or diagnostic companies matching: "${query}".
+Find companies from any country — India, USA, Europe, Asia, etc.
+Return a JSON array of up to 8 matching companies:
+[{
+  "name": "company name",
+  "region": "country or region e.g. India, USA, Germany, Singapore",
+  "sector": "pharmacy|diagnostics|health-tech",
+  "description": "1 sentence what they do",
+  "status": "Listed|Private|Startup",
+  "currency": "local currency code e.g. INR, USD, GBP",
+  "revenue_approx": "approximate annual revenue e.g. $2B or ₹500 Cr",
+  "founded": "year",
+  "known_for": "1 key thing they are known for"
+}]
+Return ONLY the JSON array.`,
+        "You are a global healthcare industry expert. Return only raw JSON array. No markdown."
+      );
+      const parsed = parseJSON(text);
+      if (Array.isArray(parsed) && parsed.length > 0) setResults(parsed);
+      else setError("No companies found. Try a different search term.");
+    } catch (e) { setError("Search failed. Please try again."); }
+    setSearching(false);
+  }
+
+  async function handlePreview(company) {
+    setPreview(null); setPreviewLoading(true); setSuccess("");
+    try {
+      const text = await callClaude(
+        `Quick financial snapshot for ${company.name} (${company.region}).
+Return JSON:
+{
+  "name": "${company.name}",
+  "region": "${company.region}",
+  "currency": "${company.currency || "USD"}",
+  "status": "${company.status || "Private"}",
+  "sector": "${company.sector}",
+  "gmv_orig": "latest GMV or N/A",
+  "gmv_inr": "in INR Cr",
+  "revenue_orig": "latest revenue",
+  "revenue_inr": "in INR Cr",
+  "cac_orig": "CAC estimate",
+  "cac_inr": "in INR",
+  "ltv_orig": "LTV estimate",
+  "ltv_inr": "in INR",
+  "ltv_cac": "ratio",
+  "contribution_margin": "%",
+  "burn_orig": "monthly burn or Profitable",
+  "burn_inr": "in INR Cr",
+  "runway": "months or Profitable",
+  "take_rate": "% or N/A",
+  "order_margin_orig": "per order margin",
+  "order_margin_inr": "in INR",
+  "yoy_growth": "%",
+  "valuation_orig": "latest valuation",
+  "valuation_inr": "in INR Cr",
+  "key_metric": "one standout metric",
+  "vs_1mg": "1 sentence comparison vs TATA 1MG",
+  "threat": "high|medium|low",
+  "revenue_sparkline": [num,num,num,num,num,num],
+  "description": "2 sentence overview"
+}
+FX: USD=84, GBP=107, EUR=91, CNY=11.5, SGD=62, AUD=55. Return ONLY JSON.`,
+        "You are a healthcare financial analyst. Return only raw JSON."
+      );
+      const parsed = parseJSON(text);
+      if (parsed) setPreview({ ...parsed, ...company });
+    } catch (e) { setError("Could not load preview."); }
+    setPreviewLoading(false);
+  }
+
+  function handleAdd() {
+    if (!preview) return;
+    const currency = preview.currency || CURRENCY_MAP[preview.region] || "USD";
+    const flag = FLAG_MAP[preview.region] || "🌐";
+    const colorIdx = Math.floor(Math.random() * COMPANY_COLORS.length);
+    const newCompany = {
+      name: preview.name,
+      region: preview.region,
+      flag,
+      color: COMPANY_COLORS[colorIdx],
+      currency,
+      symbol: currency === "INR" ? "₹" : currency === "USD" ? "$" : currency === "GBP" ? "£" : currency === "EUR" ? "€" : currency,
+      custom: true,
+    };
+    onAdd(newCompany, addingSector, preview);
+    setSuccess(`✅ ${preview.name} added to ${addingSector}!`);
+    setPreview(null); setResults(null); setQuery("");
+  }
+
+  return (
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderLeft: "3px solid #2196f3", borderRadius: "4px", padding: "16px 18px", marginBottom: "14px" }}>
+      <div style={{ fontSize: "10px", color: "#2196f3", letterSpacing: "0.18em", textTransform: "uppercase", marginBottom: "12px" }}>🔍 Search & Add Company — India or Worldwide</div>
+
+      {/* Search bar */}
+      <div style={{ display: "flex", gap: "8px", marginBottom: "12px" }}>
+        <input
+          type="text"
+          placeholder="e.g. MediBuddy, Ro Health, Zur Rose, Henry Schein, DHL Health..."
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleSearch()}
+          style={{ flex: 1, background: T.bg, border: `1px solid ${T.border}`, borderRadius: "4px", padding: "10px 14px", color: T.text, fontSize: "13px", fontFamily: "Georgia, serif", outline: "none" }}
+        />
+        <button onClick={handleSearch} disabled={searching || !query.trim()} style={{
+          background: searching || !query.trim() ? T.border : "#2196f3",
+          color: searching || !query.trim() ? T.muted : "#fff",
+          border: "none", borderRadius: "4px", padding: "10px 18px",
+          fontSize: "12px", fontWeight: "bold", letterSpacing: "0.08em", textTransform: "uppercase",
+        }}>
+          {searching ? "Searching…" : "Search"}
+        </button>
+      </div>
+
+      {error && <p style={{ color: "#ef5350", fontSize: "12px", marginBottom: "10px" }}>{error}</p>}
+      {success && <p style={{ color: "#4caf50", fontSize: "12px", marginBottom: "10px" }}>{success}</p>}
+
+      {/* Search results */}
+      {results && (
+        <div style={{ marginBottom: "14px" }}>
+          <div style={{ fontSize: "11px", color: T.muted, marginBottom: "8px" }}>{results.length} companies found — tap to preview financials:</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(220px,1fr))", gap: "8px" }}>
+            {results.map((r, i) => {
+              const alreadyAdded = existingNames.includes(r.name);
+              return (
+                <div key={i} onClick={() => !alreadyAdded && handlePreview(r)}
+                  style={{ background: T.bg, border: `1px solid ${preview?.name === r.name ? "#2196f3" : T.border}`, borderRadius: "4px", padding: "11px", cursor: alreadyAdded ? "not-allowed" : "pointer", opacity: alreadyAdded ? 0.5 : 1, transition: "border-color .2s" }}
+                  onMouseEnter={e => { if (!alreadyAdded) e.currentTarget.style.borderColor = "#2196f3"; }}
+                  onMouseLeave={e => { if (preview?.name !== r.name) e.currentTarget.style.borderColor = T.border; }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+                    <div style={{ fontSize: "13px", color: T.text, fontWeight: "bold" }}>{FLAG_MAP[r.region] || "🌐"} {r.name}</div>
+                    <span style={{ fontSize: "9px", padding: "1px 6px", border: `1px solid ${T.border}`, borderRadius: "10px", color: T.muted }}>{r.status}</span>
+                  </div>
+                  <div style={{ fontSize: "10px", color: T.muted, marginBottom: "4px" }}>{r.region} · {r.sector} · {r.currency}</div>
+                  <div style={{ fontSize: "11px", color: T.muted, fontStyle: "italic", marginBottom: "4px" }}>{r.description}</div>
+                  <div style={{ fontSize: "10px", color: "#2196f3" }}>{r.revenue_approx}</div>
+                  {alreadyAdded && <div style={{ fontSize: "9px", color: "#4caf50", marginTop: "4px" }}>✓ Already in tracker</div>}
+                  {!alreadyAdded && <div style={{ fontSize: "9px", color: "#2196f3", marginTop: "4px" }}>Tap to preview →</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Preview panel */}
+      {previewLoading && (
+        <div style={{ textAlign: "center", padding: "20px", color: T.muted, fontSize: "13px", animation: "pulse 1.2s infinite" }}>Loading financial preview…</div>
+      )}
+
+      {preview && !previewLoading && (
+        <div style={{ background: T.bg, border: `1px solid #2196f3`, borderRadius: "4px", padding: "16px", marginTop: "8px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px", flexWrap: "wrap", gap: "10px" }}>
+            <div>
+              <div style={{ fontSize: "14px", color: T.text, fontWeight: "bold", marginBottom: "2px" }}>{FLAG_MAP[preview.region] || "🌐"} {preview.name}</div>
+              <div style={{ fontSize: "11px", color: T.muted }}>{preview.region} · {preview.currency} · {preview.status}</div>
+              <div style={{ fontSize: "12px", color: T.muted, fontStyle: "italic", marginTop: "4px" }}>{preview.description}</div>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              {/* Sector selector */}
+              <select value={addingSector} onChange={e => setAddingSector(e.target.value)}
+                style={{ background: T.bg, border: `1px solid ${T.border}`, color: T.text, padding: "6px 10px", borderRadius: "4px", fontSize: "12px", fontFamily: "Georgia, serif" }}>
+                <option value="pharmacy">💊 Pharmacy</option>
+                <option value="diagnostics">🔬 Diagnostics</option>
+              </select>
+              <button onClick={handleAdd} style={{
+                background: "#2196f3", color: "#fff", border: "none", borderRadius: "4px",
+                padding: "8px 16px", fontSize: "12px", fontWeight: "bold", letterSpacing: "0.08em",
+              }}>+ Add to Tracker</button>
+            </div>
+          </div>
+
+          {/* Key financials grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(130px,1fr))", gap: "8px", marginBottom: "10px" }}>
+            {[
+              ["GMV", preview.gmv_orig, preview.gmv_inr],
+              ["Revenue", preview.revenue_orig, preview.revenue_inr],
+              ["CAC", preview.cac_orig, preview.cac_inr],
+              ["LTV", preview.ltv_orig, preview.ltv_inr],
+              ["LTV:CAC", preview.ltv_cac, null],
+              ["Contribution", preview.contribution_margin, null],
+              ["Burn", preview.burn_orig, preview.burn_inr],
+              ["Growth YoY", preview.yoy_growth, null],
+              ["Valuation", preview.valuation_orig, preview.valuation_inr],
+            ].map(([label, orig, inr], i) => (
+              <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: "4px", padding: "8px 10px" }}>
+                <div style={{ fontSize: "9px", color: T.muted, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "2px" }}>{label}</div>
+                <div style={{ fontSize: "13px", color: "#2196f3", fontWeight: "bold" }}>{orig || "—"}</div>
+                {inr && inr !== orig && <div style={{ fontSize: "9px", color: T.muted }}>≈ {inr}</div>}
+              </div>
+            ))}
+          </div>
+
+          <div style={{ fontSize: "12px", color: T.muted, fontStyle: "italic" }}>vs TATA 1MG: {preview.vs_1mg}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Financials() {
   const [mounted, setMounted] = useState(false);
@@ -735,20 +971,79 @@ export default function Financials() {
   const [lastRefresh, setLastRefresh] = useState(null);
   const [nextRefresh, setNextRefresh] = useState(null);
   const [countdown, setCountdown] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+  const [customPharma, setCustomPharma] = useState([]);
+  const [customDiag, setCustomDiag] = useState([]);
+  const [customDataPharma, setCustomDataPharma] = useState({});
+  const [customDataDiag, setCustomDataDiag] = useState({});
 
   const T = theme === "dark"
     ? { bg: "#080810", surface: "#0c0c18", border: "#151528", text: "#ddd5c5", muted: "#444", accent: "#ff8c00" }
     : { bg: "#f5f3ee", surface: "#ffffff", border: "#e0dbd0", text: "#1a1510", muted: "#888", accent: "#c47000" };
 
-  const companies = sector === "pharmacy" ? PHARMACY_COMPANIES : DIAGNOSTIC_COMPANIES;
-  const financialData = sector === "pharmacy" ? pharmaData : diagData;
+  const baseCompanies = sector === "pharmacy" ? PHARMACY_COMPANIES : DIAGNOSTIC_COMPANIES;
+  const customCompanies = sector === "pharmacy" ? customPharma : customDiag;
+  const companies = [...baseCompanies, ...customCompanies];
+  const customDataCurrent = sector === "pharmacy" ? customDataPharma : customDataDiag;
+  const baseFinancialData = sector === "pharmacy" ? pharmaData : diagData;
+  const financialData = baseFinancialData
+    ? [...baseFinancialData, ...Object.values(customDataCurrent)]
+    : Object.keys(customDataCurrent).length > 0 ? Object.values(customDataCurrent) : null;
   const benchmark = TATA_1MG_BENCHMARK[sector];
   const regions = ["All", ...Array.from(new Set(companies.map(c => c.region)))];
   const filtered = activeRegion === "All" ? companies : companies.filter(c => c.region === activeRegion);
+  const allCompanyNames = companies.map(c => c.name);
+
+  function handleAddCompany(newCompany, addSector, financialPreview) {
+    if (addSector === "pharmacy") {
+      const updated = [...customPharma.filter(c => c.name !== newCompany.name), newCompany];
+      setCustomPharma(updated);
+      try { localStorage.setItem("mb_custom_pharma", JSON.stringify(updated)); } catch {}
+      if (financialPreview) {
+        const updatedData = { ...customDataPharma, [newCompany.name]: { ...financialPreview, company: newCompany.name } };
+        setCustomDataPharma(updatedData);
+        try { localStorage.setItem("mb_custom_data_pharma", JSON.stringify(updatedData)); } catch {}
+      }
+    } else {
+      const updated = [...customDiag.filter(c => c.name !== newCompany.name), newCompany];
+      setCustomDiag(updated);
+      try { localStorage.setItem("mb_custom_diag", JSON.stringify(updated)); } catch {}
+      if (financialPreview) {
+        const updatedData = { ...customDataDiag, [newCompany.name]: { ...financialPreview, company: newCompany.name } };
+        setCustomDataDiag(updatedData);
+        try { localStorage.setItem("mb_custom_data_diag", JSON.stringify(updatedData)); } catch {}
+      }
+    }
+    setShowSearch(false);
+  }
+
+  function handleRemoveCompany(name) {
+    if (sector === "pharmacy") {
+      const updated = customPharma.filter(c => c.name !== name);
+      setCustomPharma(updated);
+      try { localStorage.setItem("mb_custom_pharma", JSON.stringify(updated)); } catch {}
+      const { [name]: _, ...rest } = customDataPharma;
+      setCustomDataPharma(rest);
+      try { localStorage.setItem("mb_custom_data_pharma", JSON.stringify(rest)); } catch {}
+    } else {
+      const updated = customDiag.filter(c => c.name !== name);
+      setCustomDiag(updated);
+      try { localStorage.setItem("mb_custom_diag", JSON.stringify(updated)); } catch {}
+      const { [name]: _, ...rest } = customDataDiag;
+      setCustomDataDiag(rest);
+      try { localStorage.setItem("mb_custom_data_diag", JSON.stringify(rest)); } catch {}
+    }
+  }
 
   useEffect(() => {
     setMounted(true);
-    try { const t = localStorage.getItem("mb_theme"); if (t) setTheme(t); } catch {}
+    try {
+      const t = localStorage.getItem("mb_theme"); if (t) setTheme(t);
+      const cp = localStorage.getItem("mb_custom_pharma"); if (cp) setCustomPharma(JSON.parse(cp));
+      const cd = localStorage.getItem("mb_custom_diag");  if (cd) setCustomDiag(JSON.parse(cd));
+      const cdp = localStorage.getItem("mb_custom_data_pharma"); if (cdp) setCustomDataPharma(JSON.parse(cdp));
+      const cdd = localStorage.getItem("mb_custom_data_diag");  if (cdd) setCustomDataDiag(JSON.parse(cdd));
+    } catch {}
   }, []);
 
   useEffect(() => { if (mounted && !financialData) fetchFinancials(); }, [mounted, sector]);
@@ -878,6 +1173,9 @@ FX: USD=84, GBP=107, EUR=91, CNY=11.5, SGD=62, AUD=55, HKD=11, CHF=95. Return ON
             )}
           </div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+            <button onClick={() => setShowSearch(s => !s)} style={{ background: showSearch ? "#2196f3" : "none", color: showSearch ? "#fff" : T.muted, border: `1px solid ${showSearch ? "#2196f3" : T.border}`, padding: "6px 12px", borderRadius: "4px", fontSize: "11px" }}>
+              {showSearch ? "✕ Close Search" : "＋ Add Company"}
+            </button>
             <button onClick={fetchFinancials} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, padding: "6px 12px", borderRadius: "4px", fontSize: "11px" }}>↻ Refresh Now</button>
             <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, padding: "6px 10px", borderRadius: "4px", fontSize: "14px" }}>{theme === "dark" ? "☀️" : "🌙"}</button>
             <a href="/" style={{ background: T.accent, color: "#000", padding: "7px 14px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold" }}>← News</a>
@@ -909,6 +1207,28 @@ FX: USD=84, GBP=107, EUR=91, CNY=11.5, SGD=62, AUD=55, HKD=11, CHF=95. Return ON
             ))}
           </div>
         </div>
+
+        {/* Search & Add Company */}
+        {showSearch && (
+          <SearchAddCompany
+            theme={theme}
+            onAdd={handleAddCompany}
+            existingNames={allCompanyNames}
+          />
+        )}
+
+        {/* Custom companies summary */}
+        {customCompanies.length > 0 && (
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "12px", padding: "10px 14px", background: "#2196f310", border: "1px solid #2196f333", borderRadius: "4px" }}>
+            <span style={{ fontSize: "10px", color: "#2196f3", textTransform: "uppercase", letterSpacing: "0.1em", alignSelf: "center" }}>Custom:</span>
+            {customCompanies.map(c => (
+              <span key={c.name} style={{ fontSize: "11px", padding: "3px 10px", background: c.color + "22", border: `1px solid ${c.color}55`, borderRadius: "20px", color: c.color, display: "flex", gap: "6px", alignItems: "center" }}>
+                {c.flag} {c.name}
+                <button onClick={() => handleRemoveCompany(c.name)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ef5350", fontSize: "10px", padding: 0, lineHeight: 1 }}>✕</button>
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* AI Insight */}
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderLeft: "3px solid #9c27b0", borderRadius: "4px", padding: "13px 16px", marginBottom: "14px" }}>
