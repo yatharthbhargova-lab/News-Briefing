@@ -1,5 +1,16 @@
 import { useState, useEffect } from "react";
 
+const METRICS = [
+  { id: "gmv",             label: "GMV & Revenue",        icon: "💰" },
+  { id: "cac",             label: "CAC",                  icon: "🎯" },
+  { id: "ltv",             label: "LTV",                  icon: "♾️" },
+  { id: "contribution",    label: "Contribution Margin",  icon: "📊" },
+  { id: "burn",            label: "Burn Rate & Runway",   icon: "🔥" },
+  { id: "order_economics", label: "Order Economics",      icon: "🧾" },
+  { id: "take_rate",       label: "Take Rate %",          icon: "🎰" },
+];
+
+
 const PHARMACY_COMPANIES = [
   // India
   { name: "Apollo 247",     region: "India",  flag: "🇮🇳", color: "#0056a3", currency: "INR", symbol: "₹" },
