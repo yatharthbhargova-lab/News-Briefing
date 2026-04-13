@@ -1125,6 +1125,53 @@ FX: USD=84, GBP=107, EUR=91, CNY=11.5, SGD=62, AUD=55, HKD=11, CHF=95. Return ON
     setInsightLoading(false);
   }
 
+  async function exportToCSV() {
+    if (!financialData) return;
+    try {
+      const rows = filtered.map(comp => {
+        const d = financialData.find(f => f.company === comp.name) || {};
+        return {
+          Company: comp.name, Region: comp.region, Currency: comp.currency,
+          Status: d.status || "-", "GMV (Orig)": d.gmv_orig || "-", "GMV INR Cr": d.gmv_inr || "-",
+          "Revenue (Orig)": d.revenue_orig || "-", "Revenue INR Cr": d.revenue_inr || "-",
+          "CAC (Orig)": d.cac_orig || "-", "CAC INR": d.cac_inr || "-",
+          "LTV (Orig)": d.ltv_orig || "-", "LTV INR": d.ltv_inr || "-",
+          "LTV:CAC": d.ltv_cac || "-", "Contribution Margin": d.contribution_margin || "-",
+          "Burn (Orig)": d.burn_orig || "-", "Burn INR Cr/mo": d.burn_inr || "-",
+          Runway: d.runway || "-", "Take Rate": d.take_rate || "-",
+          "Order Margin (Orig)": d.order_margin_orig || "-", "Order Margin INR": d.order_margin_inr || "-",
+          "YoY Growth": d.yoy_growth || "-", "Valuation (Orig)": d.valuation_orig || "-",
+          "Valuation INR Cr": d.valuation_inr || "-", "vs TATA 1MG": d.vs_1mg || "-",
+        };
+      });
+      const res = await fetch("/api/export", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "csv", data: rows, title:  }),
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url;
+      a.download = ; a.click();
+    } catch (e) { console.error(e); }
+  }
+
+  async function exportToPDF() {
+    if (!financialData) return;
+    try {
+      const rows = filtered.map(comp => {
+        const d = financialData.find(f => f.company === comp.name) || {};
+        return { company: comp.name, region: comp.region, gmv_inr: d.gmv_inr, cac_inr: d.cac_inr, ltv_inr: d.ltv_inr, ltv_cac: d.ltv_cac, contribution_margin: d.contribution_margin, yoy_growth: d.yoy_growth, valuation_inr: d.valuation_inr };
+      });
+      const res = await fetch("/api/export", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "html-pdf", data: { companies: rows, summary: aiInsight || "TATA 1MG Competitive Financial Intelligence" }, title:  }),
+      });
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, "_blank");
+    } catch (e) { console.error(e); }
+  }
+
   const METRIC_FIELDS = {
     gmv:             { orig: "gmv_orig",           inr: "gmv_inr" },
     cac:             { orig: "cac_orig",            inr: "cac_inr" },
@@ -1176,8 +1223,11 @@ FX: USD=84, GBP=107, EUR=91, CNY=11.5, SGD=62, AUD=55, HKD=11, CHF=95. Return ON
             <button onClick={() => setShowSearch(s => !s)} style={{ background: showSearch ? "#2196f3" : "none", color: showSearch ? "#fff" : T.muted, border: `1px solid ${showSearch ? "#2196f3" : T.border}`, padding: "6px 12px", borderRadius: "4px", fontSize: "11px" }}>
               {showSearch ? "✕ Close Search" : "＋ Add Company"}
             </button>
+            <button onClick={exportToCSV} disabled={!financialData} style={{ background: financialData ? "#4caf50" : T.border, color: financialData ? "#000" : T.muted, border: "none", borderRadius: "4px", padding: "6px 12px", fontSize: "11px", fontWeight: "bold" }}>⬇ Excel</button>
+            <button onClick={exportToPDF} disabled={!financialData} style={{ background: financialData ? "#ef5350" : T.border, color: financialData ? "#fff" : T.muted, border: "none", borderRadius: "4px", padding: "6px 12px", fontSize: "11px", fontWeight: "bold" }}>⬇ PDF</button>
             <button onClick={fetchFinancials} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, padding: "6px 12px", borderRadius: "4px", fontSize: "11px" }}>↻ Refresh Now</button>
             <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, padding: "6px 10px", borderRadius: "4px", fontSize: "14px" }}>{theme === "dark" ? "☀️" : "🌙"}</button>
+            <a href="/intelligence" style={{ background: "#9c27b0", color: "#fff", padding: "7px 12px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold" }}>🧠 Intelligence</a>
             <a href="/" style={{ background: T.accent, color: "#000", padding: "7px 14px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold" }}>← News</a>
           </div>
         </div>

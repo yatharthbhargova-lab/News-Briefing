@@ -426,6 +426,9 @@ export default function Home() {
             <a href="/financials" style={{ background: T.accent, color: "#000", padding: "6px 12px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
               📊 Financials
             </a>
+            <a href="/intelligence" style={{ background: "#9c27b0", color: "#fff", padding: "6px 12px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
+              🧠 Intelligence
+            </a>
           </div>
         </div>
 
