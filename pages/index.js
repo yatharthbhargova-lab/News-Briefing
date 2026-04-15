@@ -56,13 +56,13 @@ function parseJSON(text) {
   return null;
 }
 
-async function callClaude(prompt, system = "") {
+async function callClaude(prompt, system = "", maxTokens = 3000) {
   const res = await fetch("/api/claude", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1500,
+      max_tokens: maxTokens,
       system: system || "You are a senior global financial journalist. Return only raw JSON. No markdown fences, no preamble, no explanation.",
       messages: [{ role: "user", content: prompt }],
     }),
@@ -189,6 +189,7 @@ export default function Home() {
   const [emailStatus, setEmailStatus] = useState("");
   const [newWatchItem, setNewWatchItem] = useState("");
   const [speaking, setSpeaking] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(20);
   const searchRef = useRef(null);
 
   // Theme colors
@@ -212,7 +213,7 @@ export default function Home() {
 
   useEffect(() => {
     if (!mounted) return;
-    setSummary(""); setError("");
+    setSummary(""); setError(""); setVisibleCount(20);
     if (!newsCache[activeTab]) fetchNews(activeTab);
   }, [activeTab, mounted]);
 
@@ -236,11 +237,22 @@ export default function Home() {
   async function fetchNews(categoryId) {
     setLoading(true); setError("");
     const sources = SOURCE_BY_CAT[categoryId];
+    const buildPrompt = (batch) => `Topic: ${QUERIES[categoryId]}
+
+Return a JSON array of exactly 10 ${batch === 2 ? "DIFFERENT" : ""} business news items. Each item:
+{"headline":"max 10 words, specific and factual","summary":"2 sentences with specific company names and numbers","source":"one of: ${sources.join(", ")}","time":"e.g. ${batch === 1 ? "1h ago" : "3h ago"}","impact":"positive|negative|neutral","tag":"1-2 words","region":"India|USA|Europe|Asia|Global"}
+
+Return ONLY the JSON array starting with [ and ending with ]. No markdown.`;
     try {
-      const text = await callClaude(`Topic: ${QUERIES[categoryId]}\n\nReturn a JSON array of exactly 6 news items. Each item:\n{"headline":"max 10 words","summary":"2 sentences with specific names and numbers","source":"one of: ${sources.join(", ")}","time":"e.g. 2h ago","impact":"positive|negative|neutral","tag":"1-2 words","region":"India|USA|Europe|Asia|Global"}\n\nReturn ONLY the JSON array starting with [ and ending with ].`);
-      const parsed = parseJSON(text);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        setNewsCache(prev => ({ ...prev, [categoryId]: parsed }));
+      const [text1, text2] = await Promise.all([
+        callClaude(buildPrompt(1), "", 2500),
+        callClaude(buildPrompt(2), "", 2500),
+      ]);
+      const batch1 = parseJSON(text1) || [];
+      const batch2 = parseJSON(text2) || [];
+      const merged = [...batch1, ...batch2].filter(Boolean).slice(0, 20);
+      if (merged.length > 0) {
+        setNewsCache(prev => ({ ...prev, [categoryId]: merged }));
       } else throw new Error("Parse failed");
     } catch (e) { setError("Failed to load headlines. Please retry."); }
     setLoading(false);
@@ -252,7 +264,7 @@ export default function Home() {
     setSummaryLoading(true); setSummary("");
     try {
       const text = await callClaude(
-        `Headlines: ${items.map(n => n.headline).join(" | ")}\n\nWrite a 3-sentence executive briefing for the CFO of TATA 1MG. Be analytical and strategic. What does this mean for business decisions today?`,
+        `Top headlines today (${items.length} stories): ${items.map(n => n.headline).join(" | ")}\n\nWrite a 4-sentence executive briefing for the CFO of TATA 1MG covering the key themes across all these stories. Be analytical and strategic. What are the 2-3 most important things for business decisions today?`,
         "You are a senior financial analyst. Write crisp flowing prose. No bullet points."
       );
       setSummary(text);
@@ -264,7 +276,7 @@ export default function Home() {
     if (!searchQuery.trim()) return;
     setSearchLoading(true); setSearchResults(null);
     try {
-      const text = await callClaude(`Search query: "${searchQuery}"\n\nReturn a JSON array of 4 relevant business news items about this topic. Each item:\n{"headline":"max 10 words","summary":"2 sentences","source":"major publication","time":"recent","impact":"positive|negative|neutral","tag":"1-2 words","region":"India|USA|Europe|Asia|Global"}\n\nReturn ONLY the JSON array.`);
+      const text = await callClaude(`Search query: "${searchQuery}"\n\nReturn a JSON array of 8 relevant business news items about this topic. Each item:\n{"headline":"max 10 words","summary":"2 sentences","source":"major publication","time":"recent","impact":"positive|negative|neutral","tag":"1-2 words","region":"India|USA|Europe|Asia|Global"}\n\nReturn ONLY the JSON array.`);
       const parsed = parseJSON(text);
       if (Array.isArray(parsed)) setSearchResults(parsed);
     } catch { setSearchResults([]); }
@@ -504,7 +516,7 @@ export default function Home() {
             <div style={{ fontSize: "12px", color: T.muted, marginBottom: "14px" }}>
               {searchResults.length > 0 ? `${searchResults.length} results for "${searchQuery}"` : `No results found for "${searchQuery}"`}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "10px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: "10px" }}>
               {searchResults.map((item, i) => <NewsCard key={i} item={item} bookmarks={bookmarks} toggleBookmark={toggleBookmark} onShare={onShare} onRead={onRead} theme={theme} />)}
             </div>
           </div>
@@ -548,16 +560,50 @@ export default function Home() {
                 <button onClick={() => fetchNews(activeTab)} style={{ background: "none", border: `1px solid ${T.accent}`, color: T.accent, padding: "8px 22px", borderRadius: "3px", cursor: "pointer", fontSize: "12px" }}>Retry</button>
               </div>
             ) : (
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "10px" }}>
-                {currentNews.map((item, i) => <NewsCard key={i} item={item} bookmarks={bookmarks} toggleBookmark={toggleBookmark} onShare={onShare} onRead={onRead} theme={theme} />)}
-              </div>
+              <>
+                {/* Headline count bar */}
+                {currentNews.length > 0 && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
+                    <div style={{ fontSize: "11px", color: T.muted }}>
+                      Showing <b style={{ color: T.accent }}>{Math.min(visibleCount, currentNews.length)}</b> of <b style={{ color: T.accent }}>{currentNews.length}</b> stories
+                    </div>
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      {[10, 20].map(n => (
+                        <button key={n} onClick={() => setVisibleCount(n)} style={{
+                          background: visibleCount === n ? T.accent : "none",
+                          color: visibleCount === n ? "#000" : T.muted,
+                          border: `1px solid ${visibleCount === n ? T.accent : T.border}`,
+                          padding: "3px 10px", borderRadius: "20px", fontSize: "10px", cursor: "pointer",
+                        }}>{n} tiles</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: "10px" }}>
+                  {currentNews.slice(0, visibleCount).map((item, i) => <NewsCard key={i} item={item} bookmarks={bookmarks} toggleBookmark={toggleBookmark} onShare={onShare} onRead={onRead} theme={theme} />)}
+                </div>
+
+                {/* Load more / pagination */}
+                {currentNews.length > visibleCount && (
+                  <div style={{ textAlign: "center", marginTop: "16px" }}>
+                    <button onClick={() => setVisibleCount(v => Math.min(v + 10, currentNews.length))} style={{
+                      background: T.accent, color: "#000", border: "none",
+                      padding: "10px 28px", borderRadius: "3px", cursor: "pointer",
+                      fontSize: "12px", fontWeight: "bold", letterSpacing: "0.08em",
+                    }}>
+                      Load {Math.min(10, currentNews.length - visibleCount)} more →
+                    </button>
+                  </div>
+                )}
+              </>
             )}
 
             {!loading && currentNews.length > 0 && (
               <div style={{ textAlign: "center", marginTop: "20px" }}>
-                <button onClick={() => { setNewsCache(p => { const n = { ...p }; delete n[activeTab]; return n; }); setSummary(""); fetchNews(activeTab); }}
+                <button onClick={() => { setNewsCache(p => { const n = { ...p }; delete n[activeTab]; return n; }); setSummary(""); setVisibleCount(20); fetchNews(activeTab); }}
                   style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, padding: "9px 24px", borderRadius: "3px", cursor: "pointer", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                  ↻ Refresh
+                  ↻ Refresh All Headlines
                 </button>
               </div>
             )}
@@ -570,7 +616,7 @@ export default function Home() {
             <div style={{ fontSize: "12px", color: T.muted, marginBottom: "14px" }}>
               {bookmarks.length === 0 ? "No saved articles yet. Tap 📌 on any headline to save it." : `${bookmarks.length} saved articles`}
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: "10px" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))", gap: "10px" }}>
               {bookmarks.map((item, i) => <NewsCard key={i} item={item} bookmarks={bookmarks} toggleBookmark={toggleBookmark} onShare={onShare} onRead={onRead} theme={theme} />)}
             </div>
             {bookmarks.length > 0 && (
