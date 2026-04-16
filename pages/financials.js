@@ -1146,12 +1146,12 @@ FX: USD=84, GBP=107, EUR=91, CNY=11.5, SGD=62, AUD=55, HKD=11, CHF=95. Return ON
       });
       const res = await fetch("/api/export", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "csv", data: rows, title:  }),
+        body: JSON.stringify({ type: "csv", data: rows, title: "competitor-financials-" + sector }),
       });
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url;
-      a.download = ; a.click();
+      a.download = "1mg-competitor-financials-" + sector + ".csv"; a.click();
     } catch (e) { console.error(e); }
   }
 
@@ -1164,7 +1164,7 @@ FX: USD=84, GBP=107, EUR=91, CNY=11.5, SGD=62, AUD=55, HKD=11, CHF=95. Return ON
       });
       const res = await fetch("/api/export", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "html-pdf", data: { companies: rows, summary: aiInsight || "TATA 1MG Competitive Financial Intelligence" }, title:  }),
+        body: JSON.stringify({ type: "html-pdf", data: { companies: rows, summary: aiInsight || "TATA 1MG Competitive Financial Intelligence" }, title: "1MG Competitor Report - " + new Date().toLocaleDateString() }),
       });
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
