@@ -161,6 +161,8 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("markets");
   const [activeView, setActiveView] = useState("news"); // news | bookmarks | watchlist | competitors | currencies | weekly
   const [newsCache, setNewsCache] = useState({});
+  const [newsCacheTime, setNewsCacheTime] = useState({});
+  const NEWS_STALE_MS = 30 * 60 * 1000; // 30 minutes
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -214,8 +216,21 @@ export default function Home() {
   useEffect(() => {
     if (!mounted) return;
     setSummary(""); setError(""); setVisibleCount(20);
-    if (!newsCache[activeTab]) fetchNews(activeTab);
+    const cacheTime = newsCacheTime[activeTab];
+    const isStale = !cacheTime || (Date.now() - cacheTime > NEWS_STALE_MS);
+    if (!newsCache[activeTab] || isStale) fetchNews(activeTab);
   }, [activeTab, mounted]);
+
+  // Auto-refresh active tab news every 30 minutes
+  useEffect(() => {
+    if (!mounted) return;
+    const interval = setInterval(() => {
+      setNewsCache(prev => { const n = { ...prev }; delete n[activeTab]; return n; });
+      setNewsCacheTime(prev => { const n = { ...prev }; delete n[activeTab]; return n; });
+      setSummary("");
+    }, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [mounted, activeTab]);
 
   useEffect(() => {
     if (activeView === "watchlist" && !watchlistData) fetchWatchlist();
@@ -253,6 +268,7 @@ Return ONLY the JSON array starting with [ and ending with ]. No markdown.`;
       const merged = [...batch1, ...batch2].filter(Boolean).slice(0, 20);
       if (merged.length > 0) {
         setNewsCache(prev => ({ ...prev, [categoryId]: merged }));
+        setNewsCacheTime(prev => ({ ...prev, [categoryId]: Date.now() }));
       } else throw new Error("Parse failed");
     } catch (e) { setError("Failed to load headlines. Please retry."); }
     setLoading(false);
@@ -566,6 +582,12 @@ Return ONLY the JSON array starting with [ and ending with ]. No markdown.`;
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", flexWrap: "wrap", gap: "8px" }}>
                     <div style={{ fontSize: "11px", color: T.muted }}>
                       Showing <b style={{ color: T.accent }}>{Math.min(visibleCount, currentNews.length)}</b> of <b style={{ color: T.accent }}>{currentNews.length}</b> stories
+                      {newsCacheTime[activeTab] && (
+                        <span style={{ marginLeft: "10px", color: T.muted, opacity: 0.6 }}>
+                          · Updated {new Date(newsCacheTime[activeTab]).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+                          · Auto-refreshes every 30 min
+                        </span>
+                      )}
                     </div>
                     <div style={{ display: "flex", gap: "6px" }}>
                       {[10, 20].map(n => (
@@ -601,7 +623,11 @@ Return ONLY the JSON array starting with [ and ending with ]. No markdown.`;
 
             {!loading && currentNews.length > 0 && (
               <div style={{ textAlign: "center", marginTop: "20px" }}>
-                <button onClick={() => { setNewsCache(p => { const n = { ...p }; delete n[activeTab]; return n; }); setSummary(""); setVisibleCount(20); fetchNews(activeTab); }}
+                <button onClick={() => {
+                    setNewsCache(p => { const n = { ...p }; delete n[activeTab]; return n; });
+                    setNewsCacheTime(p => { const n = { ...p }; delete n[activeTab]; return n; });
+                    setSummary(""); setVisibleCount(20); fetchNews(activeTab);
+                  }}
                   style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, padding: "9px 24px", borderRadius: "3px", cursor: "pointer", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase" }}>
                   ↻ Refresh All Headlines
                 </button>
