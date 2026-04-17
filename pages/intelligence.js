@@ -25,7 +25,7 @@ async function callClaude(prompt, system, maxTokens = 2000) {
   });
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
-  return data.content[0].text;
+  return data.content.map(b => b.text || "").join("");
 }
 
 const COMPANIES = [

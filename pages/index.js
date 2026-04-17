@@ -70,7 +70,8 @@ async function callClaude(prompt, system = "", maxTokens = 3000) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
-  return data.content[0].text;
+  // Web search returns multiple content blocks — join all text blocks
+  return data.content.map(b => b.text || "").join("");
 }
 
 function useLocalStorage(key, def) {
@@ -252,12 +253,15 @@ export default function Home() {
   async function fetchNews(categoryId) {
     setLoading(true); setError("");
     const sources = SOURCE_BY_CAT[categoryId];
-    const buildPrompt = (batch) => `Topic: ${QUERIES[categoryId]}
+    const today = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+    const buildPrompt = (batch) => `Search the web right now for the latest real business news today (${today}) about: ${QUERIES[categoryId]}
 
-Return a JSON array of exactly 10 ${batch === 2 ? "DIFFERENT" : ""} business news items. Each item:
-{"headline":"max 10 words, specific and factual","summary":"2 sentences with specific company names and numbers","source":"one of: ${sources.join(", ")}","time":"e.g. ${batch === 1 ? "1h ago" : "3h ago"}","impact":"positive|negative|neutral","tag":"1-2 words","region":"India|USA|Europe|Asia|Global"}
+Use your web search tool to find ${batch === 2 ? "10 MORE DIFFERENT" : "10"} actual news stories from today or the last 48 hours from sources like ${sources.join(", ")}.
 
-Return ONLY the JSON array starting with [ and ending with ]. No markdown.`;
+After searching, return ONLY a JSON array of exactly 10 items. Each item must be based on REAL news you found:
+{"headline":"actual headline max 10 words","summary":"2 sentences with real specific details, company names, and numbers from the actual news","source":"actual publication name","time":"how long ago e.g. 2h ago or Today","impact":"positive|negative|neutral","tag":"1-2 words","region":"India|USA|Europe|Asia|Global"}
+
+Return ONLY the JSON array starting with [ and ending with ]. No markdown. Use only real news you actually found via web search.`;
     try {
       const [text1, text2] = await Promise.all([
         callClaude(buildPrompt(1), "", 2500),
