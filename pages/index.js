@@ -184,6 +184,9 @@ export default function Home() {
   const [weeklyData, setWeeklyData] = useState(null);
   const [weeklyLoading, setWeeklyLoading] = useState(false);
   const [ticker, setTicker] = useState(["SENSEX: —", "NIFTY: —", "S&P 500: —", "NASDAQ: —", "FTSE: —", "USD/INR: —", "GOLD: —", "CRUDE: —"]);
+  const [marketData, setMarketData] = useState([]);
+  const [marketStatus, setMarketStatus] = useState("");
+  const [lastMarketUpdate, setLastMarketUpdate] = useState("");
   const [greeting, setGreeting] = useState("Good morning");
   const [dateStr, setDateStr] = useState("");
   const [emailModal, setEmailModal] = useState(false);
@@ -222,6 +225,13 @@ export default function Home() {
     if (!newsCache[activeTab] || isStale) fetchNews(activeTab);
   }, [activeTab, mounted]);
 
+  // Refresh market data every 60 seconds
+  useEffect(() => {
+    if (!mounted) return;
+    const interval = setInterval(fetchTicker, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [mounted]);
+
   // Auto-refresh active tab news every 30 minutes
   useEffect(() => {
     if (!mounted) return;
@@ -244,10 +254,23 @@ export default function Home() {
 
   async function fetchTicker() {
     try {
-      const text = await callClaude(`Return a JSON array of 8 global market ticker strings with current approximate values. Include: SENSEX, NIFTY, S&P 500, NASDAQ, FTSE 100, USD/INR, GOLD, CRUDE OIL. Format like: ["SENSEX: 82,450 ▲0.4%","NIFTY: 25,020 ▲0.3%","S&P 500: 5,650 ▲0.5%","NASDAQ: 18,200 ▲0.7%","FTSE 100: 8,320 ▼0.1%","USD/INR: ₹83.52","GOLD: $2,340/oz","CRUDE: $78.4/bbl"]. Return ONLY the JSON array.`);
-      const parsed = parseJSON(text);
-      if (Array.isArray(parsed)) setTicker(parsed);
-    } catch {}
+      const res = await fetch("/api/market");
+      if (!res.ok) throw new Error("Market API failed");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.ticker_strings)) {
+        setTicker(data.ticker_strings.filter(t => !t.includes("—")).slice(0, 10));
+        setMarketData(data.data);
+        setMarketStatus(data.market_status);
+        setLastMarketUpdate(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
+      }
+    } catch (e) {
+      // Fallback to Claude if live API fails
+      try {
+        const text = await callClaude(`Return a JSON array of 8 global market ticker strings with current approximate values. Include: SENSEX, NIFTY, S&P 500, NASDAQ, FTSE 100, USD/INR, GOLD, CRUDE OIL. Return ONLY the JSON array.`);
+        const parsed = parseJSON(text);
+        if (Array.isArray(parsed)) setTicker(parsed);
+      } catch {}
+    }
   }
 
   async function fetchNews(categoryId) {
@@ -430,11 +453,25 @@ Return ONLY the JSON array starting with [ and ending with ]. No markdown. Use o
       `}</style>
 
       {/* Ticker */}
-      <div style={{ background: T.tickerBg, borderBottom: `1px solid ${T.border}`, padding: "7px 0", overflow: "hidden" }}>
-        <div style={{ display: "flex", gap: "52px", animation: "ticker 40s linear infinite", whiteSpace: "nowrap" }}>
-          {[...ticker, ...ticker].map((t, i) => (
-            <span key={i} style={{ fontSize: "11px", color: T.ticker, fontFamily: "monospace", fontWeight: "bold", letterSpacing: "0.05em" }}>◆ {t}</span>
-          ))}
+      <div style={{ background: T.tickerBg, borderBottom: `1px solid ${T.border}`, overflow: "hidden" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 12px 0", borderBottom: `1px solid ${T.border}22` }}>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <span style={{ fontSize: "9px", color: marketStatus === "OPEN" ? "#4caf50" : "#ef5350", fontWeight: "bold" }}>
+              {marketStatus === "OPEN" ? "● LIVE" : "● CLOSED"}
+            </span>
+            {lastMarketUpdate && <span style={{ fontSize: "9px", color: T.muted }}>Updated {lastMarketUpdate}</span>}
+          </div>
+          <span style={{ fontSize: "9px", color: T.muted }}>Powered by Yahoo Finance</span>
+        </div>
+        <div style={{ padding: "5px 0", overflow: "hidden" }}>
+          <div style={{ display: "flex", gap: "52px", animation: "ticker 40s linear infinite", whiteSpace: "nowrap" }}>
+            {[...ticker, ...ticker].map((t, i) => {
+              const isUp = t.includes("▲");
+              const isDown = t.includes("▼");
+              const color = isUp ? "#4caf50" : isDown ? "#ef5350" : T.ticker;
+              return <span key={i} style={{ fontSize: "11px", color, fontFamily: "monospace", fontWeight: "bold", letterSpacing: "0.05em" }}>◆ {t}</span>;
+            })}
+          </div>
         </div>
       </div>
 
@@ -460,6 +497,7 @@ Return ONLY the JSON array starting with [ and ending with ]. No markdown. Use o
             <a href="/kpi" style={{ background: "#4caf50", color: "#000", padding: "6px 10px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold", whiteSpace: "nowrap" }}>📈 KPIs</a>
             <a href="/alerts" style={{ background: "#ef5350", color: "#fff", padding: "6px 10px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold", whiteSpace: "nowrap" }}>🔔 Alerts</a>
             <a href="/scenario" style={{ background: "#1565c0", color: "#fff", padding: "6px 10px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold", whiteSpace: "nowrap" }}>🎯 Scenarios</a>
+            <a href="/market" style={{ background: "#00838f", color: "#fff", padding: "6px 10px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold", whiteSpace: "nowrap" }}>📡 Live Markets</a>
           </div>
         </div>
 
