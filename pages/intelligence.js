@@ -971,7 +971,10 @@ export default function Intelligence() {
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
             <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, padding: "6px 10px", borderRadius: "4px", fontSize: "14px" }}>{theme === "dark" ? "☀️" : "🌙"}</button>
-            <a href="/financials" style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, padding: "7px 12px", borderRadius: "4px", fontSize: "11px", textDecoration: "none" }}>📊 Financials</a>
+            <a href="/financials" style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, padding: "6px 10px", borderRadius: "4px", fontSize: "11px", textDecoration: "none" }}>📊 Fin</a>
+            <a href="/kpi" style={{ background: "#4caf50", color: "#000", padding: "6px 10px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold" }}>📈 KPIs</a>
+            <a href="/alerts" style={{ background: "#ef5350", color: "#fff", padding: "6px 10px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold" }}>🔔 Alerts</a>
+            <a href="/scenario" style={{ background: "#1565c0", color: "#fff", padding: "6px 10px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold" }}>🎯 Scenarios</a>
             <a href="/" style={{ background: T.accent, color: "#000", padding: "7px 14px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold" }}>← News</a>
           </div>
         </div>

@@ -455,12 +455,11 @@ Return ONLY the JSON array starting with [ and ending with ]. No markdown. Use o
             <button onClick={() => setEmailModal(true)} style={{ background: "none", border: `1px solid ${T.border}`, color: T.muted, padding: "6px 10px", borderRadius: "4px", cursor: "pointer", fontSize: "14px" }} title="Email digest">
               📧
             </button>
-            <a href="/financials" style={{ background: T.accent, color: "#000", padding: "6px 12px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
-              📊 Financials
-            </a>
-            <a href="/intelligence" style={{ background: "#9c27b0", color: "#fff", padding: "6px 12px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold", letterSpacing: "0.08em", whiteSpace: "nowrap" }}>
-              🧠 Intelligence
-            </a>
+            <a href="/financials" style={{ background: T.accent, color: "#000", padding: "6px 10px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold", whiteSpace: "nowrap" }}>📊 Financials</a>
+            <a href="/intelligence" style={{ background: "#9c27b0", color: "#fff", padding: "6px 10px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold", whiteSpace: "nowrap" }}>🧠 Intel</a>
+            <a href="/kpi" style={{ background: "#4caf50", color: "#000", padding: "6px 10px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold", whiteSpace: "nowrap" }}>📈 KPIs</a>
+            <a href="/alerts" style={{ background: "#ef5350", color: "#fff", padding: "6px 10px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold", whiteSpace: "nowrap" }}>🔔 Alerts</a>
+            <a href="/scenario" style={{ background: "#1565c0", color: "#fff", padding: "6px 10px", borderRadius: "4px", fontSize: "11px", textDecoration: "none", fontWeight: "bold", whiteSpace: "nowrap" }}>🎯 Scenarios</a>
           </div>
         </div>
 
